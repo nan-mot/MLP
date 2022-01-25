@@ -8,7 +8,7 @@ import java.util.List;
 
 
 public class DataSet {
-    private String datasetFilePath = "C:\\study\\vtb\\MLP\\processed.cleveland.data";
+    private String datasetFilePath = "./processed.cleveland.data";
     private Double[][] studyData;
     private Double[] studyAnswers;
     private Double[][] data;
