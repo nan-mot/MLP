@@ -7,17 +7,17 @@ public class App {
         DataSet dataSet = new DataSet();
         MLP mlp = new MLP(
                 500,
-                0.2,
-                8,
+                0.01,
+                100,
                 1,
                 dataSet.getStudyData(),
                 dataSet.getStudyAnswers()
         );
-        Double[] calculated;
+        Double calculated;
         for (int i = 0; i < dataSet.getTrainData().length; i++) {
             calculated = mlp.calculateResult(dataSet.getTrainData()[i]);
             System.out.println(
-                    "Calculated: " + Math.round(calculated[0]) +
+                    "Calculated: " + Math.round(calculated) +
                             "  Real: " + dataSet.getTrainAnswers()[i]);
         }
     }
