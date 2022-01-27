@@ -41,7 +41,7 @@ public class DataSet {
     public void readCSV() throws IOException {
         File file = new File(datasetFilePath);
         List<String> lines = Files.readAllLines(file.toPath());
-        int toStudy = 180;
+        int toStudy = 240;
         studyData = new Double[toStudy][13];
         studyAnswers = new Double[toStudy];
         data = new Double[lines.size() - toStudy][13];
