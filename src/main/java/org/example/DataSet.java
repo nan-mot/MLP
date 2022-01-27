@@ -1,32 +1,61 @@
 package org.example;
 
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 public class DataSet {
-    private String datasetFilePath = "./processed.cleveland.data";
-    private Double[][] studyData;
-    private Double[] studyAnswers;
-    private Double[][] data;
-    private Double[] answers;
 
-    public DataSet() throws IOException {
-        readCSV();
+    private Double[][] studyData;
+    private Double[][] studyAnswers;
+    private Double[][] data;
+    private Double[][] answers;
+
+    private Map<String, Double[]> answersMatchingMap = new HashMap<>();
+    private Map<Integer, String> answerByOrderNumber = new HashMap<>();
+    private int answerCounter = 0;
+    private int totalAnswers;
+
+
+    public DataSet(String studyDatasetFilePath, String testDatasetFilePath, int totalAnswers, String delimiter) throws IOException {
+        this.totalAnswers = totalAnswers;
+
+        Pair<Double[][], Double[][]> parsedData;
+        parsedData = parseDataset(studyDatasetFilePath, delimiter);
+        studyData = parsedData.first;
+        studyAnswers = parsedData.second;
+
+        parsedData = parseDataset(testDatasetFilePath, delimiter);
+        data = parsedData.first;
+        answers = parsedData.second;
+        System.out.println("Parsed");
     }
 
-    private void splitData(int i, String line, Double[][] data, Double[] answers) {
-        String[] split = line.split(",");
-        for (int j = 0; j < split.length; j++) {
+    private Pair<Double[][], Double[][]> parseDataset(String filePath, String delimiter) throws IOException {
+        File file = new File(filePath);
+        List<String> lines = Files.readAllLines(file.toPath());
+        return splitData(lines, delimiter);
+    }
+
+    private Pair<Double[][], Double[][]> splitData(List<String> lines, String delimiter) {
+        Double[][] data = new Double[lines.size()][lines.get(0).split(delimiter).length - 1];
+        Double[][] answers = new Double[lines.size()][totalAnswers];
+        String[] split;
+        for (int i = 0; i < lines.size(); i++) {
+            split = lines.get(i).split(",");
+            for (int j = 0; j < split.length; j++) {
                 if (j == split.length - 1) {
-                    answers[i] = parseDouble(split[j]);
+                    answers[i] = parseAnswer(split[j]);
                 } else {
                     data[i][j] = parseDouble(split[j]);
                 }
+            }
         }
+        return new Pair<>(data, answers);
     }
 
     private Double parseDouble(String s) {
@@ -38,25 +67,35 @@ public class DataSet {
         }
     }
 
-    public void readCSV() throws IOException {
-        File file = new File(datasetFilePath);
-        List<String> lines = Files.readAllLines(file.toPath());
-        int toStudy = 240;
-        studyData = new Double[toStudy][13];
-        studyAnswers = new Double[toStudy];
-        data = new Double[lines.size() - toStudy][13];
-        answers = new Double[lines.size() - toStudy];
-        for (int i = 0; i < lines.size(); i++) {
-            if (i < toStudy) {
-                splitData(i, lines.get(i), studyData, studyAnswers);
-            } else {
-                splitData(i - toStudy, lines.get(i), data, answers);
+    public Double[] parseAnswer(String answer) {
+        if (answersMatchingMap.containsKey(answer)) {
+            return answersMatchingMap.get(answer);
+        } else {
+            Double[] newAnswer = new Double[totalAnswers];
+            for (int i = 0; i < totalAnswers; i++) {
+                newAnswer[i] = 0D;
             }
+            newAnswer[answerCounter] = 1D;
+            answersMatchingMap.put(answer, newAnswer);
+            answerByOrderNumber.put(answerCounter, answer);
+            answerCounter++;
+            return newAnswer;
         }
-
     }
 
-    public Double[] getStudyAnswers() {
+    public String getAnswerString(Double[] answerVector) {
+        Double maxValue = Double.MIN_VALUE;
+        int index = 0;
+        for (int i = 0; i < answerVector.length; i++) {
+            if (answerVector[i] > maxValue) {
+                maxValue = answerVector[i];
+                index = i;
+            }
+        }
+        return answerByOrderNumber.get(index);
+    }
+
+    public Double[][] getStudyAnswers() {
         return studyAnswers;
     }
 
@@ -68,7 +107,7 @@ public class DataSet {
         return data;
     }
 
-    public Double[] getTrainAnswers() {
+    public Double[][] getTrainAnswers() {
         return answers;
     }
 

@@ -12,18 +12,15 @@ public class MLP {
     private final int epochCount;
     private final double learningRate;
 
-
-    private Double[] hiddenLayerResults;
     private Double[][] inputToHiddenLayerWeights;
-
-    private Double[] hiddenToOuterLayerWeights;
+    private Double[][] hiddenToOuterLayerWeights;
 
 
     public MLP(int epochCount,
                double learningRate,
                int hiddenLayerSize,
                int outerLayerSize,
-               Double[][] trainingSet, Double[] trainingAnswer) throws IOException {
+               Double[][] trainingSet, Double[][] trainingAnswer) throws IOException {
         this.epochCount = epochCount;
         this.learningRate = learningRate;
         initializationWeight(trainingSet[0].length, hiddenLayerSize, outerLayerSize);
@@ -31,9 +28,9 @@ public class MLP {
     }
 
 
-    public Double calculateResult(Double[] input) {
-        hiddenLayerResults = calculateHiddenLayerNodeResults(input, inputToHiddenLayerWeights);
-        return calculateOuterLayerNodeResult(hiddenLayerResults, hiddenToOuterLayerWeights);
+    public Double[] calculateResult(Double[] input) {
+        Double[] hiddenLayerResults = calculateLayerNodeResults(input, inputToHiddenLayerWeights);
+        return calculateLayerNodeResults(hiddenLayerResults, hiddenToOuterLayerWeights);
     }
 
 
@@ -44,17 +41,20 @@ public class MLP {
                 inputToHiddenLayerWeights[i][j] = Math.random();
             }
         }
-        hiddenToOuterLayerWeights = new Double[hiddenLayerSize];
-        for (int i = 0; i < hiddenToOuterLayerWeights.length; i++) {
-            hiddenToOuterLayerWeights[i] = Math.random();
+        hiddenToOuterLayerWeights = new Double[outerLayerSize][hiddenLayerSize];
+        for (int i = 0; i < outerLayerSize; i++) {
+            for (int j = 0; j < hiddenToOuterLayerWeights[0].length; j++) {
+                hiddenToOuterLayerWeights[i][j] = Math.random();
+            }
         }
     }
 
-    private void study(Double[][] trainingSet, Double[] trainingAnswer) throws IOException {
+    private void study(Double[][] trainingSet, Double[][] trainingAnswer) throws IOException {
         Double[] hiddenDelta;
-        Double outerDelta;
+        Double[] outerDelta;
         Double errorFunction = 0D;
-        Double outerLayerResult;
+        Double[] hiddenLayerResults;
+        Double[] outerLayerResult;
         File errorFile = new File("./gError.txt");
         if (errorFile.exists()) {
             errorFile.delete();
@@ -63,17 +63,17 @@ public class MLP {
         StringBuilder builder = new StringBuilder();
         for (int e = 0; e < epochCount; e++) {
             for (int n = 0; n < trainingSet.length; n++) {
-                hiddenLayerResults = calculateHiddenLayerNodeResults(trainingSet[n], inputToHiddenLayerWeights);
-                outerLayerResult = calculateOuterLayerNodeResult(hiddenLayerResults, hiddenToOuterLayerWeights);
+                hiddenLayerResults = calculateLayerNodeResults(trainingSet[n], inputToHiddenLayerWeights);
+                outerLayerResult = calculateLayerNodeResults(hiddenLayerResults, hiddenToOuterLayerWeights);
 
                 errorFunction = calculateErrorFunction(trainingAnswer[n], outerLayerResult);
                 builder.append(errorFunction).append(System.lineSeparator());
 
                 outerDelta = outerLevelDeltas(outerLayerResult, trainingAnswer[n]);
-                hiddenToOuterLayerWeights = recalculateHiddenOuterLayerWeights(hiddenToOuterLayerWeights, outerDelta, hiddenLayerResults);
+                hiddenToOuterLayerWeights = recalculateLayerToNextWeights(hiddenToOuterLayerWeights, outerDelta, hiddenLayerResults);
 
                 hiddenDelta = hiddenLevelDeltas(outerDelta, hiddenToOuterLayerWeights, hiddenLayerResults);
-                inputToHiddenLayerWeights = recalculateLayerWeights(inputToHiddenLayerWeights, hiddenDelta, trainingSet[n]);
+                inputToHiddenLayerWeights = recalculateLayerToNextWeights(inputToHiddenLayerWeights, hiddenDelta, trainingSet[n]);
             }
         }
         Files.write(errorFilePath, builder.toString().getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -88,7 +88,7 @@ public class MLP {
      * @param weights - веса для к
      * @return вычисленное значение узла
      */
-    private Double[] calculateHiddenLayerNodeResults(Double[] inputValues, Double[][] weights) {
+    private Double[] calculateLayerNodeResults(Double[] inputValues, Double[][] weights) {
         Double[] layerNodeResults = new Double[weights.length];
         for (int i = 0; i < weights.length; i++) {
             layerNodeResults[i] = calculateNodeResult(inputValues, weights[i]);
@@ -123,11 +123,15 @@ public class MLP {
         return activationFunction(sum);
     }
 
-    private Double calculateErrorFunction(Double targetValue, Double resultValue) {
+    private Double calculateErrorFunction(Double[] targetValues, Double[] resultValues) {
         double errorFunction = 0D;
-        double toPow = Math.abs(targetValue - resultValue);
-        double powResult = Math.pow(toPow, 2D);
-        errorFunction += powResult;
+        double toPow;
+        double powResult;
+        for (int k = 0; k < targetValues.length; k++) {
+            toPow = Math.abs(targetValues[k] - resultValues[k]);
+            powResult = Math.pow(toPow, 2D);
+            errorFunction += powResult;
+        }
         return errorFunction / 2;
     }
 
@@ -135,7 +139,7 @@ public class MLP {
 
     private Double activationFunction(Double netj) {
         //return coefficient * netj;
-        return 1 / (1 + Math.exp( netj * coefficient));
+        return 1 / (1 + Math.exp(-netj));
     }
 
     private Double activationFunctionDerivative(Double x) {
@@ -144,27 +148,36 @@ public class MLP {
     }
 
 
-    private Double outerLevelDeltas(Double outValue, Double answer) {
-        return (outValue - answer) * outValue * (1 - outValue);
-    }
-
-    private Double[] recalculateHiddenOuterLayerWeights(Double[] currentWeights, Double delta, Double[] outerInput) {
-        Double[] newWeights = new Double[currentWeights.length];
-        for (int i = 0; i < newWeights.length; i++) {
-            newWeights[i] = currentWeights[i] - learningRate * delta * outerInput[i];
+    private Double[] outerLevelDeltas(Double[] outValues, Double[] answers) {
+        Double[] outerLevelDeltas = new Double[outValues.length];
+        for (int i = 0; i < outerLevelDeltas.length; i++) {
+            outerLevelDeltas[i] = (outValues[i] - answers[i]) * outValues[i] * (1 - outValues[i]);
         }
-        return newWeights;
+        return outerLevelDeltas;
     }
 
-    private Double[] hiddenLevelDeltas(Double outerDelta, Double[] hiddenToOutWeights, Double[] outputValues) {
+    private Double[] hiddenLevelDeltas(Double[] previousLayerDeltas, Double[][] hiddenToNextWeights, Double[] outputValues) {
         Double[] hiddenLevelDeltas = new Double[outputValues.length];
+        Double[] weightedOuterErrorsSum = weightedOuterErrorsSum(previousLayerDeltas, hiddenToNextWeights);
         for (int i = 0; i < hiddenLevelDeltas.length; i++) {
-            hiddenLevelDeltas[i] = outerDelta * hiddenToOutWeights[i] * (outputValues[i] * (1 - outputValues[i]));
+            hiddenLevelDeltas[i] = weightedOuterErrorsSum[i] * (outputValues[i] * (1 - outputValues[i]));
         }
         return hiddenLevelDeltas;
     }
 
-    private Double[][] recalculateLayerWeights(Double[][] currentWeights, Double[] deltas, Double[] inputValues) {
+    private Double[] weightedOuterErrorsSum(Double[] previousLayerDeltas, Double[][] levelToNextWeights) {
+        Double[] weightedErrorsSum = new Double[levelToNextWeights[0].length];
+        double sum = 0D;
+        for (int i = 0; i < weightedErrorsSum.length; i++) {
+            for (int j = 0; j < levelToNextWeights.length; j++) {
+                sum += previousLayerDeltas[j] * levelToNextWeights[j][i];
+            }
+            weightedErrorsSum[i] = sum;
+        }
+        return weightedErrorsSum;
+    }
+
+    private Double[][] recalculateLayerToNextWeights(Double[][] currentWeights, Double[] deltas, Double[] inputValues) {
         Double[][] previousLayerNewWeights = new Double[currentWeights.length][currentWeights[0].length];
         for (int i = 0; i < deltas.length; i++) {
             for (int j = 0; j < previousLayerNewWeights[0].length; j++) {
